@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bat-Signal Profile Picture Creator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for better aesthetics */
+        :root {
+            --primary-color: #202020; /* Dark gray for the bat */
+            --accent-color: #facc15;  /* Yellow accent */
+            --bg-color: #f9fafb;     /* Light background */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+        }
+        /* Hide the default file input for custom styling */
+        input[type="file"] {
+            display: none;
+        }
+        .file-upload-label {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .file-upload-label:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+        /* Hide canvas until an image is loaded */
+        #outputCanvas {
+            display: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-radius: 0.75rem; /* rounded-xl */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-2xl bg-white p-8 rounded-2xl shadow-2xl border border-gray-100">
+
+            <!-- Header -->
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2 flex items-center justify-center">
+                <span class="mr-2 text-3xl">🦇</span> Glid-ify Your PFP
+            </h1>
+            <p class="text-gray-500 text-center mb-8">Upload your profile picture, and we'll add the custom logo!</p>
+
+            <!-- Main Content Area -->
+            <div id="appContainer" class="space-y-6">
+
+                <!-- 1. File Upload Section -->
+                <div class="text-center">
+                    <input type="file" id="imageInput" accept="image/*">
+                    <label for="imageInput" class="file-upload-label inline-flex items-center px-6 py-3 bg-gray-900 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        <span id="uploadText">Upload Profile Picture</span>
+                    </label>
+                </div>
+
+                <!-- 2. Canvas Output Area -->
+                <div id="canvasContainer" class="flex justify-center mt-6">
+                    <canvas id="outputCanvas" width="400" height="400" class="border-4 border-gray-200"></canvas>
+                </div>
+
+                <!-- 3. Download Button (initially hidden) -->
+                <div class="text-center pt-4">
+                    <button id="downloadButton" disabled class="px-8 py-3 bg-yellow-400 text-gray-900 font-bold rounded-lg shadow-lg opacity-50 cursor-not-allowed transition duration-200 hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Download Bat-ified Image
+                    </button>
+                </div>
+
+                <!-- Message Box for Feedback -->
+                <div id="messageBox" class="text-center text-sm text-red-500 min-h-[1.5rem]"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const imageInput = document.getElementById('imageInput');
+            const outputCanvas = document.getElementById('outputCanvas');
+            const downloadButton = document.getElementById('downloadButton');
+            const uploadText = document.getElementById('uploadText');
+            const messageBox = document.getElementById('messageBox');
+            const ctx = outputCanvas.getContext('2d');
+
+            // --- 1. Logo Data (Base64 SVG for the Bat Logo) ---
+            // This is a self-contained SVG version of the provided dark bat logo.
+            const BAT_LOGO_SVG = '<svg viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg"><path d="M 0 10 C 25 0, 75 0, 100 10 L 50 50 Z" fill="#202020"/></svg>';
+            const BAT_LOGO_URL = 'data:image/svg+xml;base64,' + btoa(BAT_LOGO_SVG);
+
+            const batLogo = new Image();
+            batLogo.crossOrigin = 'anonymous';
+            batLogo.src = BAT_LOGO_URL;
+
+            // Load the bat logo once on script start
+            batLogo.onload = () => {
+                // Logo is ready to be drawn
+            };
+
+            // --- 2. Event Listener for File Input ---
+            imageInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                uploadText.textContent = `Processing: ${file.name}`;
+                messageBox.textContent = '';
+                downloadButton.disabled = true;
+                downloadButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const profileImage = new Image();
+                    profileImage.onload = () => {
+                        try {
+                            overlayLogo(profileImage);
+                            uploadText.textContent = 'Change Profile Picture';
+                        } catch (error) {
+                            messageBox.textContent = 'Error processing image. Please try another file.';
+                            console.error('Image processing error:', error);
+                        }
+                    };
+                    profileImage.onerror = () => {
+                        messageBox.textContent = 'Could not load image file.';
+                        uploadText.textContent = 'Upload Profile Picture';
+                    };
+                    profileImage.src = e.target.result;
+                };
+                reader.onerror = () => {
+                    messageBox.textContent = 'Error reading file.';
+                    uploadText.textContent = 'Upload Profile Picture';
+                };
+                reader.readAsDataURL(file);
+            });
+
+
+            // --- 3. Core Image Processing Logic ---
+            const overlayLogo = (profileImage) => {
+                // Set canvas size to the natural size of the uploaded image
+                const w = profileImage.naturalWidth;
+                const h = profileImage.naturalHeight;
+
+                // Set a maximum size for display/download to prevent huge files
+                const MAX_SIZE = 800; // Max width/height in pixels
+
+                let finalW = w;
+                let finalH = h;
+
+                // Resize if image is too large
+                if (w > MAX_SIZE || h > MAX_SIZE) {
+                    if (w > h) {
+                        finalW = MAX_SIZE;
+                        finalH = Math.round((h / w) * MAX_SIZE);
+                    } else {
+                        finalH = MAX_SIZE;
+                        finalW = Math.round((w / h) * MAX_SIZE);
+                    }
+                }
+
+                outputCanvas.width = finalW;
+                outputCanvas.height = finalH;
+
+                // 1. Draw the profile picture
+                ctx.clearRect(0, 0, finalW, finalH);
+                ctx.drawImage(profileImage, 0, 0, finalW, finalH);
+
+                // 2. Determine logo size and position
+                // We'll make the logo a fraction of the image width (e.g., 25% of the width)
+                const logoSize = finalW * 0.25;
+                const logoX = (finalW / 2) - (logoSize / 2); // Centered horizontally
+                // Position the logo slightly high (e.g., 10% from the top)
+                const logoY = finalH * 0.10;
+
+                // 3. Draw the bat logo
+                // The SVG has a 100:50 (2:1) aspect ratio
+                const logoHeight = logoSize / 2;
+
+                if (batLogo.complete && batLogo.naturalWidth > 0) {
+                    ctx.drawImage(batLogo, logoX, logoY, logoSize, logoHeight);
+
+                    // Re-enable download button
+                    outputCanvas.style.display = 'block';
+                    downloadButton.disabled = false;
+                    downloadButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    messageBox.textContent = 'Error: The Bat Logo failed to load. Try refreshing.';
+                    outputCanvas.style.display = 'none';
+                }
+            };
+
+
+            // --- 4. Download Function ---
+            downloadButton.addEventListener('click', () => {
+                if (outputCanvas.style.display === 'none') {
+                    messageBox.textContent = 'Please upload and process an image first.';
+                    return;
+                }
+                
+                // Get the image data as a PNG
+                const imageURL = outputCanvas.toDataURL('image/png');
+
+                // Create a temporary link element
+                const a = document.createElement('a');
+                a.href = imageURL;
+                a.download = 'bat-pfp.png';
+                
+                // Programmatically click the link to trigger the download
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            });
+        });
+    </script>
+
+</body>
+</html>
